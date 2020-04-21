@@ -1,24 +1,24 @@
 initialize() {
 	if (exists("slimgui"))
 	{
-		// Size of Each Population
-		defineConstant("N",500); 
-		
-		// Migration Rate Between Populations
-		defineConstant("mig",0.01); 
 	
-		// Number of Mother's Curse: Restorer Pairs Initially Unique to Each Population
-		defineConstant("MC_R",25); 
+		// Size of Each Population
+		defineConstant("N",1000);
+
+		// Migration Rate Between Populations	
+		defineConstant("mig",0.01);
+
+		// Number of Mother's Curse: Restorer Pairs Initially Unique to Each Population	
+		defineConstant("MC_R",20);
 		
-		// Mother's Curse Cost in Males & Advantage in Females
-		defineConstant("MC_del",-0.01); 
-		defineConstant("MC_adv",1.0);
-		
+		// Mother's Curse Cost in Males & Advantage in Females	
+		defineConstant("MC_del",0.0);
+		defineConstant("MC_adv",1.00);
+
 		// Output File Names
 		defineConstant("filename1",'/Users/Minie/Desktop/SLiM_Models/test/' + paste(c(MC_R,MC_del,MC_adv),'_') + '_meanfit.txt');
-		defineConstant("filename2",'/Users/Minie/Desktop/SLiM_Models/test/' + paste(c(MC_R,MC_del,MC_adv),'_') + '_freqrun.txt');	
-	}
-	
+		defineConstant("filename2",'/Users/Minie/Desktop/SLiM_Models/test/' + paste(c(MC_R,MC_del,MC_adv),'_') + '_freqrun.txt');
+	}	
 
 
 	// No New Mutations
@@ -57,18 +57,20 @@ initialize() {
 	m5.convertToSubstitution = F;
 	m5.color = 'gray60'; 
 	
+	//m6 Y Chromosome Marker Mutation
+	initializeMutationType('m6',0.5,'f',0.0);
+	m6.convertToSubstitution = F;
+	m6.color = 'gray40';
 	
 	initializeGenomicElementType('g1',c(m1,m3),c(1.0,1.0));
 	initializeGenomicElementType('g2',c(m2,m4),c(1.0,1.0));
-
-	initializeGenomicElement(g1,0,2*MC_R);
-	initializeGenomicElement(g2,(2*MC_R)+1,4*MC_R);
 	
+	initializeMutationRate(0.0);
+	initializeGenomicElement(g1,0,2*MC_R);
+	initializeGenomicElement(g2,(2*MC_R)+1,4*MC_R+1);
+
 	// Recombination Rate for Nuclear Region
-	defineConstant("r",0.5);
-	rates = c(0,0.5);
-	ends = c(L_M,L_M+L_N);
-	initializeRecombinationRate(rates,ends);
+	initializeRecombinationRate(0);
 	
 	line = paste(c('p1_meanfit','p2_meanfit','avg_meanfit'),'\t');
 	writeFile(filename1,line,append=T);
@@ -95,21 +97,34 @@ initialize() {
 	mito = inds.genomes[seqAlong(inds) * 2];
 	mito.addNewDrawnMutation(m5, 0);
 	
-	// Add M1 (Mother's Curse) and M2 (Nuclear Restorer) Mutations to p1
 	
+	// Every male will also carry a marker denoting which genome
+	// is the Y chromosome
+	
+	males = inds[inds.sex=='M'];
+	Y = males.genomes[seqAlong(males)*2+1];
+	Y.addNewDrawnMutation(m6,4*MC_R+1);
+	
+	// Add M1 (Mother's Curse) and M2 (Nuclear Restorer) Mutations to p1
+		
 	p1_inds = p1.individuals;
 	p1_mito = p1_inds.genomes[seqAlong(p1_inds) * 2];
 	
 	for (i in seq(1,MC_R)) {
 		p1_mito.addNewDrawnMutation(m1,i);
 	}
+
+	p1_males = p1_inds[p1_inds.sex=='M'];
+	p1_Y = p1_males.genomes[seqAlong(p1_males)*2+1];
+	
 	
 	for (i in seq((2*MC_R)+1,3*MC_R)) {
-		p1_inds.genomes.addNewDrawnMutation(m2,i);
+		p1_Y.addNewDrawnMutation(m2,i);
+	
 	}
 	
 	// Add M1 (Mother's Curse) and M2 (Nuclear Restorer) Mutations to p2
-		
+	
 	p2_inds = p2.individuals;
 	p2_mito = p2_inds.genomes[seqAlong(p2_inds) * 2];
 	
@@ -117,49 +132,57 @@ initialize() {
 		p2_mito.addNewDrawnMutation(m3,i);
 	}
 	
-	for (i in seq((3*MC_R)+1,4*MC_R)) {
-		p2_inds.genomes.addNewDrawnMutation(m4,i);
-	}
 	
+	p2_males = p2_inds[p2_inds.sex=='M'];
+	p2_Y = p2_males.genomes[seqAlong(p2_males)*2+1]	;
+	
+	for (i in seq((3*MC_R)+1,4*MC_R)) {
+	
+		p2_Y.addNewDrawnMutation(m4,i);
+		
+	}
+
 	// Tag all mutations in Pop 1 such that
 	// for each Mother's Curse loci there is 
-	// one nuclear restorer loci
+	// one nuclear restorer loci	
 	all_m1 = sim.mutationsOfType(m1);
 	all_m1.tag = seq(1,MC_R);
-	
+
 	all_m2 = sim.mutationsOfType(m2);
 	all_m2.tag = seq(1,MC_R);
-	
+
 	// For all Mother's Curse variants
-	// set the advantage in female
+	// set the advantage in female		
 	for (mut_m1 in all_m1) {
 		mut_m1.setValue('f_F',MC_adv);
 	}
 	
+
 	// For all nuclear restorers
-	// set the dominance coefficient 
+	// set the dominance coefficient 	
 	for (mut_m2 in all_m2) {
 		mut_m2.setValue("d_M",0.5);
 	}
-	
+
 	// Tag all mutations in Pop 2 such that
 	// for each Mother's Curse loci there is 
 	// one nuclear restorer loci	
-	
+		
 	all_m3 = sim.mutationsOfType(m3);
 	all_m3.tag = seq(MC_R+1,2*MC_R);
 
+	all_m4 = sim.mutationsOfType(m4);
+	all_m4.tag = seq(MC_R+1,2*MC_R);
+
 	// For all Mother's Curse variants
-	// set the advantage in female
+	// set the advantage in female	
 	for (mut_m3 in all_m3) {
 		mut_m3.setValue('f_F',MC_adv);
 	}
+		
 
 	// For all nuclear restorers
 	// set the dominance coefficient 		
-	all_m4 = sim.mutationsOfType(m4);
-	all_m4.tag = seq(MC_R+1,2*MC_R);
-	
 	for (mut_m4 in all_m4) {
 		mut_m4.setValue('d_M',0.5);
 	}
@@ -174,9 +197,16 @@ modifyChild()
 	// percentage of the time, this is where that would be done.
 	if (!childGenome1.containsMarkerMutation(m5, 0))
 		return F;
-	if (childGenome2.containsMarkerMutation(m5, 0))
+
+	// Ensure that no female contains a Y chromosome using the m6 marker
+	if (child.sex=='F' & childGenome2.containsMarkerMutation(m6,4*MC_R+1)) {
 		return F;
+	}
 	
+	// Ensure that every male contains a Y chromosome using the m6 marker
+	if (child.sex=='M' & !childGenome2.containsMarkerMutation(m6,4*MC_R+1)) {
+		return F;
+	}
 	// At this point, we have determined that the offspring is valid,
 	// having inherited its mitochondrial genome from its mother, and
 	// so now we do some cleanup of the genetics of the offspring.
@@ -187,7 +217,8 @@ modifyChild()
 	// mutation types for neutral mutations in the two genomes.
 	childGenome2.removeMutations(childGenome2.mutationsOfType(m1));
 	childGenome2.removeMutations(childGenome2.mutationsOfType(m3));
-
+	childGenome2.removeMutations(childGenome2.mutationsOfType(m5));
+		
 	return T;
 	
 }
@@ -208,18 +239,18 @@ fitness(m1)
 	
 	// So, since the fitness effect in females does not depend upon the
 	// presence/absence of compensators, we can deal with them up front.
-	if (individual.sex == "F")
+	if (individual.sex == "F") {
 		return mut.getValue("f_F");
-
+	}
+	
 	// For males, we need to determine how many of restorers they contain
 	// for the specific Mother's Cures mutation
 	lockShape = mut.tag;
 	allCompensators = individual.genomes.mutationsOfType(m2);
-	matchCompensators = allCompensators[allCompensators.tag == lockShape];
+	matchCompensators = allCompensators[allCompensators.tag==lockShape];
 	keyCount = size(matchCompensators);
 	
-	
-	if (keyCount == 2)
+	if (keyCount == 1)
 	{
 		// At least two keys are present for the lock mutation, so we consider
 		// it to be fully compensated for.  Note that these keys might be two
@@ -227,13 +258,6 @@ fitness(m1)
 		// this individual.  This is by design; it seems like perhaps it makes
 		// sense.  But if a different scheme is wanted, it should be possible.
 		return 1.0;
-	}
-	else if (keyCount == 1)
-	{
-		// Only one key is present for the lock mutation; the individual is
-		// heterozygous for some particular key mutation.  Here we use the
-		// dominance coefficient for the epistatic effect.
-		return 1.0 + mut.selectionCoeff * matchCompensators.getValue("d_M");
 	}
 	else
 	{
@@ -268,10 +292,10 @@ fitness(m3)
 	// for the specific Mother's Cures mutation
 	lockShape = mut.tag;
 	allCompensators = individual.genomes.mutationsOfType(m4);
-	matchCompensators = allCompensators[allCompensators.tag == lockShape];
+	matchCompensators = allCompensators[allCompensators.tag==lockShape];
 	keyCount = size(matchCompensators);
 	
-	if (keyCount == 2)
+	if (keyCount == 1)
 	{
 		// At least two keys are present for the lock mutation, so we consider
 		// it to be fully compensated for.  Note that these keys might be two
@@ -280,13 +304,7 @@ fitness(m3)
 		// sense.  But if a different scheme is wanted, it should be possible.
 		return 1.0;
 	}
-	else if (keyCount == 1)
-	{
-		// Only one key is present for the lock mutation; the individual is
-		// heterozygous for some particular key mutation.  Here we use the
-		// dominance coefficient for the epistatic effect.
-		return 1.0 + mut.selectionCoeff * matchCompensators.getValue("d_M");
-	}
+
 	else
 	{
 		// No compensator ("key") is present.  Given this, if the focal mut is
