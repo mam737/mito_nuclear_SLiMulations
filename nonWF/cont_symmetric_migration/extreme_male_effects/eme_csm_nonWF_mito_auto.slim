@@ -1,0 +1,467 @@
+initialize() {
+//if (exists("slimgui"))
+//	{
+//		defineConstant("N",2000);
+//	
+//		defineConstant('mig',0.01);
+//		defineConstant("MC_R",20);
+//		defineConstant("MC_del",-0.1);
+//		defineConstant("MC_adv",1.0);		
+//		defineConstant("filename",'/Users/Minie/Desktop/SLiM_Models/test/' + paste(c(MC_R,MC_del,MC_adv),'_') + '_meanfit.txt');
+	
+//	}
+	
+
+	initializeSLiMModelType("nonWF");
+	// Define Carrying Capacity
+	defineConstant("K", N);
+
+	initializeSex("A");
+	
+	defineConstant("r",0.5);
+	
+
+	// Define Number of Mitochondrial Loci
+	defineConstant("L_M",2*MC_R);
+
+	// Define Number of Nuclear Loci
+	defineConstant("L_N",2*MC_R);
+	
+	
+	// m1 mutation - Mitochondrial MC Fixed in Pop 1
+	initializeMutationType("m1", 1.0, "f", MC_del);
+	m1.convertToSubstitution = F;
+	m1.color = 'red';
+	
+	//m2 mutation - Nuclear Restorer Fixed in Pop 1
+	initializeMutationType("m2",0.5,"f",0.0);
+	m2.convertToSubstitution = F;
+	m2.color = 'limegreen';
+	
+	//m3 mutation - Mitochonddrial MC Fixed in Pop 2
+	initializeMutationType("m3",1.0,"f", MC_del);
+	m3.convertToSubstitution = F;
+	m3.color = 'blue';
+	
+	//m4 mutation - Nuclear Restorer Fixed in Pop 2
+	initializeMutationType("m4",0.5,"f",0.0);
+	m4.convertToSubstitution = F;
+	m4.color = 'purple';
+	
+	//m5 mutation - Mitochondrial Marker Mutation Used for Transmission
+	initializeMutationType('m5',0.5,'f',0.0);
+	m5.convertToSubstitution = F;
+	m5.color = 'gray60'; 
+	
+	// We have 2 genomic elements - Mitochondrial + Nuclear
+	initializeGenomicElementType('g1',c(m1,m3),c(1.0,1.0));
+	initializeGenomicElementType('g2',c(m2,m4),c(1.0,1.0));
+	initializeGenomicElement(g1,0,2*MC_R);
+	initializeGenomicElement(g2,(2*MC_R)+1,4*MC_R);
+
+	// We do not add any new mutations during this simulation
+	initializeMutationRate(0.0);
+	
+	// There is no recombinatin within the mitochondrial genome
+	// We assume that nuclear restorers are unlinked - i.e recomb r = 0.5
+	rates = c(0,0.5);
+	ends = c(L_M,L_M+L_N);
+	initializeRecombinationRate(rates,ends);
+	
+	// Output File for Population Fitnesses
+	line = paste(c('p1_meanfit','p2_meanfit','avg_meanfit'),sep='\t');
+	writeFile(filename1,line,append=T);
+	
+	// Output File for Mutation Frequencies
+	line = paste(c('MutType','Gen','P1_Freq','P2_Freq','Avg_Freq'),sep='\t');
+	writeFile(filename2, line, append=T);
+	
+	// Output Sex Ratios
+	line = paste(c('Gen','P1_Sex_Ratio','P2_Sex_Ratio'),sep='\t');
+	writeFile(filename3,line,append=T);
+	
+	// Output M:F Fitness
+	line = paste(c('Gen','P1_Female_Fitness','P1_Male_Fitness','P2_Female_Fitness','P2_Male_Fitness'),sep='\t');
+	writeFile(filename4,line,append=T);
+	
+
+}
+
+
+reproduction() {	
+	// Create # offspring = carrying capacity parameter
+	
+	p1_breeders = sample(p1.individuals,1000);
+	p1_breeder_females = p1_breeders[p1_breeders.sex=='F'];
+	p1_breeder_males = p1_breeders[p1_breeders.sex=='M'];
+
+	p2_breeders = sample(p2.individuals,1000);
+	p2_breeder_females = p2_breeders[p2_breeders.sex=='F'];
+	p2_breeder_males = p2_breeders[p2_breeders.sex=='M'];
+		
+	for (i in seqLen(K))
+	{
+		p1_firstParent = sample(p1_breeder_females,1);
+		p1_secondParent = sample(p1_breeder_males,1);
+		
+		while (isNULL(p1.addCrossed(p1_firstParent, p1_secondParent)))
+		{
+			p1_firstParent = sample(p1_breeder_females,1);
+			p1_secondParent = sample(p1_breeder_males,1);				
+		}
+		
+		p1.addCrossed(p1_firstParent, p1_secondParent);	
+		
+		p2_firstParent = sample(p2_breeder_females,1);
+		p2_secondParent = sample(p2_breeder_males,1);
+
+		while (isNULL(p2.addCrossed(p2_firstParent, p2_secondParent)))
+		{
+			p2_firstParent = sample(p2_breeder_females,1);
+			p2_secondParent = sample(p2_breeder_males,1);				
+		}
+		p2.addCrossed(p2_firstParent, p2_secondParent);	
+	}
+	self.active = 0;
+}
+
+// create a population of N individuals
+1 early()
+{
+	
+	sim.addSubpop("p1", K);
+	sim.addSubpop("p2", K);
+	
+	
+	// Each individual has a haploid mitochondrial genome, designated
+	// by the presence of an m5 marker mutation that we add here; these
+	// markers are inherited and live forever in the simulation.
+	inds = sim.subpopulations.individuals;
+	mito = inds.genomes[seqAlong(inds) * 2];
+	mito.addNewDrawnMutation(m5, 0);
+	
+	// Add M1 MC mutations to all indviduals in Pop1	
+	p1_inds = p1.individuals;
+	p1_mito = p1_inds.genomes[seqAlong(p1_inds) * 2];
+	
+	for (i in seq(1,MC_R)) {
+		p1_mito.addNewDrawnMutation(m1,i);
+	}
+	
+	// Add M2 Restorer mutations to all indviduals in Pop1
+	for (i in seq((2*MC_R)+1,3*MC_R)) {
+		p1_inds.genomes.addNewDrawnMutation(m2,i);
+	}
+	
+	// Add M3 MC Mutations to all indviduals in Pop2
+	p2_inds = p2.individuals;
+	p2_mito = p2_inds.genomes[seqAlong(p2_inds) * 2];	
+	for (i in seq(MC_R+1,2*MC_R)) {
+		p2_mito.addNewDrawnMutation(m3,i);
+	}
+	
+	// Add M4 MC Mutations to all indviduals in Pop2
+	for (i in seq((3*MC_R)+1,4*MC_R)) {
+		p2_inds.genomes.addNewDrawnMutation(m4,i);
+	}
+	
+	
+	// Give each MC + Restorer Pair in Pop 1 a unique tag, so you can
+	// track interacting loci
+	
+	all_m1 = sim.mutationsOfType(m1);
+	all_m1.tag = seq(1,MC_R);
+	
+	all_m2 = sim.mutationsOfType(m2);
+	all_m2.tag = seq(1,MC_R);
+
+	// Assign fem advantage of MC Variants
+	for (mut_m1 in all_m1) {
+		mut_m1.setValue('f_F',MC_adv);
+	}
+	
+	// Assign dominance of nuclear restorers
+	for (mut_m2 in all_m2) {
+		mut_m2.setValue("d_M",0.5);
+	}
+
+	// Give each MC + Restorer Pair in Pop 2 a unique tag, so you can
+	// track interacting loci
+		
+	all_m3 = sim.mutationsOfType(m3);
+	all_m3.tag = seq(MC_R+1,2*MC_R);
+
+	all_m4 = sim.mutationsOfType(m4);
+	all_m4.tag = seq(MC_R+1,2*MC_R);
+	
+	// Assign fem advantage of MC Variants
+	for (mut_m3 in all_m3) {
+		mut_m3.setValue('f_F',MC_adv);
+	}
+		
+	// Assign dominance of nuclear restorers
+	for (mut_m4 in all_m4) {
+		mut_m4.setValue('d_M',0.5);
+	}
+}
+
+// Remove parental generation - to get discrete, non-overlapping generations
+early()
+{
+	inds = sim.subpopulations.individuals;
+	inds[inds.age > 0].fitnessScaling = 0.0;
+}
+
+
+1: {
+
+// We are setitng up a symmetric, sex-specific migraiton rate
+// i.e. f_mig = migration rate for females of moving from p1->p2 + p2->p1
+//      m_mig = migration rate for males of moving from p1->p2 + p2->p1
+// Here, sex-equivalent so f_mig = m_mig 
+
+	
+    // Migration of new offspring from p1 to p2:
+    newborns_p1 = p1.individuals[p1.individuals.age == 0];
+    females_p1 = newborns_p1[newborns_p1.sex == "F"];
+    males_p1 = newborns_p1[newborns_p1.sex == "M"];
+    
+    // Fem migration rate: newborn females will migrate to p2.
+    for (ind in females_p1)
+        if (runif(1) < mig)
+            p2.takeMigrants(ind);
+    // Male migration rate: newborn males will migrate to p2.
+    for (ind in males_p1)
+        if (runif(1) < mig)
+            p2.takeMigrants(ind);
+            
+    // Migration of new offspring from p2 to p1:
+    newborns_p2 = p2.individuals[p2.individuals.age == 0];
+    females_p2 = newborns_p2[newborns_p2.sex == "F"];
+    males_p2 = newborns_p2[newborns_p2.sex == "M"];
+    
+    // Fem migration rate: newborn females will migrate to p2.
+    for (ind in females_p2)
+       if (runif(1) < mig)
+            p1.takeMigrants(ind);
+   // Male migration rate: newborn males will migrate to p2.
+    for (ind in males_p2)
+        if (runif(1) < mig)
+            p1.takeMigrants(ind);          
+        
+}
+
+
+modifyChild()
+{
+	// Each offspring needs to inherit a mitochondrial genome from its
+	// female parent, and not inherit one from the male parent.  Note that
+	// childGenome1 comes from the first (female parent).  If we wanted to
+	// model mitochondria coming from the male parent instead, a small
+	// percentage of the time, this is where that would be done.
+	if (!childGenome1.containsMarkerMutation(m5, 0))
+		return F;
+	if (childGenome2.containsMarkerMutation(m5, 0))
+		return F;
+	
+	// At this point, we have determined that the offspring is valid,
+	// having inherited its mitochondrial genome from its mother, and
+	// so now we do some cleanup of the genetics of the offspring.
+	
+	// We enforce haploidy in the mitochondrial genome here, by removing all
+	// mutations from the null genome.  This prevents any confusion during
+	// during fitness calculations.  This is one reason we use different
+	// mutation types for neutral mutations in the two genomes.
+	childGenome2.removeMutations(childGenome2.mutationsOfType(m1));
+	childGenome2.removeMutations(childGenome2.mutationsOfType(m3));
+
+	return T;
+	
+}
+
+
+fitness(m1) 
+{
+	// OK, so: m1 mutations have different fitness effects in males versus
+	// females, and those effects also depend upon whether a compensator
+	// for the particular m1 mutation is present in the nuclear genome.
+	// So we have, in effect, four basic cases for an m3 mutation:
+	//  - in a male, no compensator present
+	//  - in a female, no compensator present
+	//  - in a male, compensator present
+	//  - in a female, compensator present
+	// In the present design, the fitness in females is assumed to be the
+	// same whether compensators are present or not.  In males, the fitness
+	// effect of the compensator depends upon dominance as well; see below.
+	
+	// So, since the fitness effect in females does not depend upon the
+	// presence/absence of compensators, we can deal with them up front.
+	if (individual.sex == "F")
+		return mut.getValue("f_F");
+
+	// This is where the tags we assigned earlier come into play
+	lockShape = mut.tag;
+	allCompensators = individual.genomes.mutationsOfType(m2);
+	matchCompensators = allCompensators[allCompensators.tag == lockShape];
+	keyCount = size(matchCompensators);
+	
+	if (keyCount == 2)
+	{
+		// At least two keys are present for the lock mutation, so we consider
+		// it to be fully compensated for.  
+		return 1.0;
+	}
+	else if (keyCount == 1)
+	{
+		// Only one key is present for the lock mutation; the individual is
+		// heterozygous for some particular key mutation.  Here we use the
+		// dominance coefficient for the epistatic effect.
+		return 1.0 + mut.selectionCoeff * matchCompensators.getValue("d_M");
+	}
+	else
+	{
+		// No compensator ("key") is present.  Given this, if the focal mut is
+		// in a male, the effect is given by the m3 mut's selection coefficient,
+		// so we use relFitness here.
+		if (individual.sex == "M")
+			return relFitness;
+	}
+}
+
+
+fitness(m3) 
+{
+	// OK, so: m3 mutations have different fitness effects in males versus
+	// females, and those effects also depend upon whether a compensator
+	// for the particular m3 mutation is present in the nuclear genome.
+	// So we have, in effect, four basic cases for an m3 mutation:
+	//  - in a male, no compensator present
+	//  - in a female, no compensator present
+	//  - in a male, compensator present
+	//  - in a female, compensator present
+	// In the present design, the fitness in females is assumed to be the
+	// same whether compensators are present or not.  In males, the fitness
+	// effect of the compensator depends upon dominance as well; see below.
+	
+	// So, since the fitness effect in females does not depend upon the
+	// presence/absence of compensators, we can deal with them up front.
+	if (individual.sex == "F")
+		return mut.getValue("f_F");
+
+	// This is where the tags we assigned earlier come into play
+	lockShape = mut.tag;
+	allCompensators = individual.genomes.mutationsOfType(m4);
+	matchCompensators = allCompensators[allCompensators.tag == lockShape];
+	keyCount = size(matchCompensators);
+	
+	if (keyCount == 2)
+	{
+		// At least two keys are present for the lock mutation, so we consider
+		// it to be fully compensated for.  
+		return 1.0;
+	}
+	else if (keyCount == 1)
+	{
+		// Only one key is present for the lock mutation; the individual is
+		// heterozygous for some particular key mutation.  Here we use the
+		// dominance coefficient for the epistatic effect.
+		return 1.0 + mut.selectionCoeff * matchCompensators.getValue("d_M");
+	}
+	else
+	{
+		// No compensator ("key") is present.  Given this, if the focal mut is
+		// in a male, the effect is given by the m3 mut's selection coefficient,
+		// so we use relFitness here.
+		if (individual.sex == "M")
+			return relFitness;
+	}
+}
+
+// output samples of 10 genomes periodically, all fixed mutations at end
+late ()
+{
+	if (sim.generation % 10 == 0) {
+		//cat("p1 mean fitness = " + mean(p1.cachedFitness(NULL)) + "\n");
+		//cat("p2 mean fitness = " + mean(p2.cachedFitness(NULL)) + "\n");
+		
+
+		
+		p1_mean = mean(p1.cachedFitness(NULL));
+		p2_mean = mean(p2.cachedFitness(NULL));
+		avg_mean = (p1_mean + p2_mean)/2; 
+		
+		//cat("Avg mean fitness = " + avg_mean + "\n");
+		
+		line = paste(c(p1_mean,'\t',p2_mean,'\t',avg_mean,'\n'));
+		writeFile(filename1, line, append=T);
+		
+
+		p1_females = p1.individuals[p1.individuals.sex=='F'];
+		p1_males = p1.individuals[p1.individuals.sex=='M'];
+		
+		p1_female_fit = mean(p1.cachedFitness(p1_females.index));
+		p1_male_fit = mean(p1.cachedFitness(p1_males.index));
+
+		p2_females = p2.individuals[p2.individuals.sex=='F'];
+		p2_males = p2.individuals[p2.individuals.sex=='M'];
+		
+		p2_female_fit = mean(p2.cachedFitness(p2_females.index));
+		p2_male_fit = mean(p2.cachedFitness(p2_males.index));		
+		
+		line = paste(c(sim.generation,'\t',p1_female_fit,'\t',p1_male_fit,'\t',p2_female_fit,'\t',p2_male_fit,'\n'));
+		writeFile(filename4, line, append=T);
+		
+		for (i in sim.mutationsOfType(m1)) {
+			tag = paste(c("m1",i.tag),"_");
+			p1_freq = sim.mutationFrequencies(p1,i);
+			p2_freq = sim.mutationFrequencies(p2,i);
+			avg_freq = sim.mutationFrequencies(NULL,i);
+			
+			
+			line = paste(c(tag,sim.generation,p1_freq,p2_freq,avg_freq),sep='\t');
+			writeFile(filename2, line, append=T);
+		}
+		
+		for (i in sim.mutationsOfType(m2)) {
+			tag = paste(c("m2",i.tag),"_");
+			p1_freq = sim.mutationFrequencies(p1,i);
+			p2_freq = sim.mutationFrequencies(p2,i);
+			avg_freq = sim.mutationFrequencies(NULL,i);
+			
+			line = paste(c(tag,sim.generation,p1_freq,p2_freq,avg_freq),sep='\t');
+			writeFile(filename2, line, append=T);
+		}
+		
+		for (i in sim.mutationsOfType(m3)) {
+			tag = paste(c("m3",i.tag),"_");
+			p1_freq = sim.mutationFrequencies(p1,i);
+			p2_freq = sim.mutationFrequencies(p2,i);
+			avg_freq = sim.mutationFrequencies(NULL,i);
+			
+			line = paste(c(tag,sim.generation,p1_freq,p2_freq,avg_freq),sep='\t');
+			writeFile(filename2, line, append=T);
+		}
+		
+		for (i in sim.mutationsOfType(m4)) {
+			tag = paste(c("m4",i.tag),"_");
+			p1_freq = sim.mutationFrequencies(p1,i);
+			p2_freq = sim.mutationFrequencies(p2,i);
+			avg_freq = sim.mutationFrequencies(NULL,i);
+			
+			line = paste(c(tag,sim.generation,p1_freq,p2_freq,avg_freq),sep='\t');
+			writeFile(filename2, line, append=T);
+		}
+		
+		p1_sex = sum(p1.individuals.sex=='M')/length(p1.individuals);		
+		p2_sex = sum(p2.individuals.sex=='M')/length(p2.individuals);
+		
+		line = paste(c(sim.generation,p1_sex,p2_sex),sep='\t');
+		writeFile(filename3,line,append=T);
+										
+	}
+}
+
+1000 late()
+{
+}
+
