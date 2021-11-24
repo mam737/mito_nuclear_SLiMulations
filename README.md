@@ -8,3 +8,10 @@ This repository contains all of the SLiM scripts used to explore the consequence
 - CSSM: Continuous Sex-Specific Migration
 
 We consider three locations for nuclear restorers: autosomal (auto), X-Linked, and Y-Linked.
+
+We additionally considered 3 extensions of our model with continuous symmetric migration to test certain held assumptions. These extensions can be found in the folder for CSM. They encompass:
+- VAD: Vary Autosomal Dominance (of nuclear restorers)
+- DFF: Differential Female Fitness (for each mitochondrial haplogroup)
+- EME: Extreme Male Effects (for Mother's Curse variants)
+
+As these were tests, these models were only run for a subset of the parameter space explored.
